@@ -1,0 +1,147 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=24mm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,siunitx,enumitem,hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue,citecolor=blue}
+\sisetup{per-mode=symbol}
+
+\title{High-Speed Railway Suspension Model\\Assumptions, Equations, Reproducibility, and Validation Status}
+\author{Repository documentation}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document is the README/specification for the reproducible Python companion model in \texttt{simulate\_suspension.py}. It records the final parameters, equations, operating cases, controller conventions, generated files, and known limitations. \texttt{Model.slx} is retained as the reference implementation for the four-corner structure and quarter-car subsystem parameters. MATLAB/Simulink was not available when the Python results were generated; consequently, the results are a numerical reconstruction and are not a validation certificate for the Simulink model.
+\end{abstract}
+
+\tableofcontents
+
+\section{Repository contents and quick start}
+The main files are:
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+File & Purpose\\
+\midrule
+\texttt{simulate\_suspension.py} & Reproducible simulation and plotting script\\
+\texttt{Model.slx} & Reference four-corner Simulink model\\
+\texttt{Dimensions.txt} & Supplied vehicle-dimension notes\\
+\texttt{1-s2.0-S088832701930559X-main.pdf} & High-speed railway semi-active suspension reference\\
+\texttt{Semiactive Control of High-Speed Railway Vehicle Suspension.pdf} & SH--ADD reference\\
+\texttt{MR Damper.pdf} & MR damper/Bouc--Wen reference\\
+\texttt{nishimura2004.pdf} & High-speed railway suspension reference\\
+\texttt{results/} & Generated CSV data, PNG figures, and JSON summary\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Run from the repository root with:
+\begin{verbatim}
+python3 simulate_suspension.py
+\end{verbatim}
+The script writes all generated files into \texttt{results/}. The stochastic track realization is reproducible because the NumPy generator seed is \texttt{20261101}. The simulation time step is \SI{0.002}{s} and the nominal duration is \SI{60}{s}.
+
+\section{Source audit and parameter decisions}
+The code was checked against the supplied LaTeX assumptions, the XML contents of \texttt{Model.slx}, \texttt{Dimensions.txt}, and the supplied research papers. The final values are:
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Quantity & Final value & Basis/qualification\\
+\midrule
+Wheel gauge/track width $W$ & \SI{1.435}{m} & LaTeX and \texttt{Model.slx}\\
+Wheel diameter & \SI{0.860}{m} & \texttt{Dimensions.txt}\\
+Wheel radius & \SI{0.430}{m} & \texttt{Dimensions.txt}\\
+Quarter sprung mass $m_s$ & \SI{875}{kg} & $3500/4$; final LaTeX decision\\
+Quarter unsprung mass $m_u$ & \SI{875}{kg} & \texttt{Model.slx} parameter\\
+Total supported mass $m$ & \SI{3500}{kg} & \texttt{Model.slx}/LaTeX\\
+Suspension stiffness $k_s$ & \SI{2000}{N/m} & \texttt{Model.slx}\\
+Tyre stiffness $k_t$ & \SI{8000}{N/m} & \texttt{Model.slx}\\
+Tyre damping $c_t$ & \SI{35}{N.s/m} & Python numerical assumption\\
+Longitudinal spacing $L$ & \SI{20.5}{m} & \texttt{Model.slx} constant\\
+CG/load-transfer height $H$ & \SI{5.45}{m} & \texttt{Dimensions.txt}; provisional\\
+Gravity $g$ & \SI{9.8}{m/s^2} & LaTeX and \texttt{Model.slx}\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+There are source inconsistencies. \texttt{Dimensions.txt} labels \SI{3500}{kg} as unsprung mass and also lists \SI{775}{kg} as sprung mass; these values cannot both describe the quarter-car used here. The final model uses \SI{3500}{kg} as total supported mass and \SI{875}{kg} per corner. The supplied document also lists a \SI{25}{m} bogie length and a \SI{3.09}{m} bogie width, while the Simulink load-transfer subsystem uses \SI{20.5}{m} longitudinal spacing and the gauge \SI{1.435}{m}. The code uses the Simulink values for the dynamic reference and the gauge for the left/right load-transfer arm. The \SI{5.45}{m} value is called ``bogie height'' in \texttt{Dimensions.txt}; it must be replaced by a verified CG height before engineering conclusions are drawn.
+
+\section{Four-corner load distribution}
+The corner order is front-left, front-right, rear-left, rear-right. The first-order mass equivalent used for reporting is
+\begin{align}
+ m_{FL} &= \frac{m}{4}+\frac{m a_x H}{2gL}+\frac{m a_{y,u}H}{2gW},\\
+ m_{FR} &= \frac{m}{4}+\frac{m a_x H}{2gL}-\frac{m a_{y,u}H}{2gW},\\
+ m_{RL} &= \frac{m}{4}-\frac{m a_x H}{2gL}+\frac{m a_{y,u}H}{2gW},\\
+ m_{RR} &= \frac{m}{4}-\frac{m a_x H}{2gL}-\frac{m a_{y,u}H}{2gW}.
+\end{align}
+Here $a_x$ is longitudinal acceleration and $a_{y,u}$ is unbalanced lateral acceleration. The signs assume positive acceleration loads the front and positive unbalanced turn loads the left side; reversing the turn reverses the left/right signs.
+
+For a banked/canted track with cant angle $\theta$,
+\begin{equation}
+ a_{y,u}=\frac{v^2}{R}-g\tan\theta.
+\end{equation}
+The final curve cases use $\theta=\SI{6}{degree}$ and impose a 20\% margin on the no-wheel-unloading limit:
+\begin{equation}
+ |a_{y,u}| \leq 0.8\frac{gW}{2H},\qquad
+ v_{curve,max}=\sqrt{R\left(0.8\frac{gW}{2H}+g\tan\theta\right)}.
+\end{equation}
+This gives approximately \SI{258.5}{km/h} for $R=\SI{2500}{m}$ and \SI{327.0}{km/h} for $R=\SI{4000}{m}$, rather than forcing an inadmissible \SI{360}{km/h} through both curves.
+
+The raw equation is retained in the CSV files. For the vertical ODE only, raw corner values are bounded to 10--190\% of the nominal quarter mass and renormalized to \SI{3500}{kg}. The inertial mass remains \SI{875}{kg} per dynamic corner; the bounded mass is applied as a quasi-static vertical load shift. This prevents negative masses entering an ODE while keeping the source-equation result auditable.
+
+\section{Vertical four-corner model}
+Each corner uses sprung displacement/velocity $(z_s,\dot z_s)$ and unsprung displacement/velocity $(z_u,\dot z_u)$. Let $x=z_s-z_u$, $\dot x=\dot z_s-\dot z_u$, and let $z_r$ be rail elevation:
+\begin{align}
+ F_t &= k_t(z_u-z_r)+c_t(\dot z_u-\dot z_r),\\
+ m_s\ddot z_s &= -F_s+F_{load},\\
+ m_u\ddot z_u &= F_s-F_t-F_{load}.
+\end{align}
+Here $F_{load}=(m_{corner,eff}-m_s)g$ is the bounded quasi-static load shift. The four body accelerations are averaged for the carriage response. A common spatial rail profile is used by all cases; corner longitudinal offsets are $0$, $W$, $L$, and $L+W$.
+
+\section{Suspension cases}
+\subsection{Passive baseline}
+The requested passive baseline is spring-only, $F_s=k_sx$, with no damper current and no active actuator. This is not a conventional commercial passive comparison; a conventional passive comparison would specify a fixed nonzero damper coefficient.
+
+\subsection{Semi-active MR case}
+The implementation follows the supplied SH--ADD concept: a switching metric selects a skyhook-like or acceleration-driven damping command, bounded by $c_{min}=\SI{100}{N.s/m}$ and $c_{max}=\SI{100000}{N.s/m}$. The command is converted to $0\le I\le\SI{2.5}{A}$ and applied to
+\begin{align}
+ F_{MR} &= c_0(I)\dot x+k_0(x-x_0)+\alpha(I)z,\\
+ \dot z &= -\gamma(I)|\dot x|z|z|^{n(I)-1}-\beta\dot x|z|^{n(I)}+A\dot x.
+\end{align}
+The final parameter functions are
+\begin{align*}
+\alpha(I)&=31.58I+2210, & c_0(I)&=7.21I+5.62, & k_0&=0.92,\\
+\gamma(I)&=1.14e^{0.026I}+6.90e^{2.13\times10^{-5}I}, & \beta&=2.01\times10^{-3}, & A&=1.08,\\
+n(I)&=0.34e^{0.95I}+0.42e^{0.58I}, & x_0&=0.59.
+\end{align*}
+The $k_0$ term and $x_0$ offset are included in the final code. This is a SH--ADD-like numerical reconstruction, not a claim that every measurement, delay, and switching detail of the supplied paper has been reproduced.
+
+\subsection{Active case}
+The active case uses full-state continuous-time LQR feedback, not a complete LQG observer implementation. The state is $[z_s,\dot z_s,z_u,\dot z_u]^T$ and the gain is obtained from \texttt{scipy.linalg.solve\_continuous\_are}. It is designed around the spring-only baseline with
+\begin{equation}
+ Q=\operatorname{diag}(2\times10^5,2\times10^3,2\times10^3,20),\qquad R=10^{-3}.
+\end{equation}
+The actuator force is saturated at $\pm\SI{20000}{N}$. Replacing this with true LQG requires an explicitly defined sensor matrix and process/measurement noise covariances, which are not exposed by \texttt{Model.slx}.
+
+\section{Operating cases and generated outputs}
+The straight-line acceleration case ramps from 0 to \SI{360}{km/h} in \SI{60}{s}; its constant longitudinal acceleration is \SI{1.667}{m/s^2}. The deceleration case reverses this ramp. The two curve cases use the canted, speed-limited profiles above.
+
+The script generates speed, longitudinal acceleration, unbalanced lateral acceleration, raw/effective four-corner masses, body/corner vertical acceleration, one-second moving-RMS carriage amplitude, PNG figures, CSV data, and a JSON summary. The principal figures are \texttt{results/full\_model\_amplitude\_by\_operating\_case.png}, \texttt{results/operating\_scenarios.png}, and \texttt{results/corner\_mass\_shifting.png}. The frequency plot uses Welch's method with a Hann window and reports the square root of acceleration PSD as ASD; it is a frequency representation, not a time-domain amplitude.
+
+\section{Verification status and limitations}
+The script checks that reported corner-mass rows sum to the total mass and that MR current commands are clipped to the specified range. The same time step and reproducible rail realization are used for all controllers within a scenario.
+
+Remaining engineering validation tasks are:
+\begin{enumerate}[nosep]
+\item replace provisional $H=\SI{5.45}{m}$ with verified CG height;
+\item resolve conflicting mass, width, and length labels in \texttt{Dimensions.txt};
+\item run \texttt{Model.slx} in MATLAB/Simulink and compare states, signs, units, solver settings, and delays;
+\item replace full-state LQR with LQG after sensor/noise definitions are available;
+\item validate the SH--ADD switching law, MR force lag, and current inversion against the supplied papers and measured damper data;
+\item add a vehicle-level lateral/yaw/roll model if lateral carriage acceleration, roll angle, or cant deficiency is required.
+\end{enumerate}
+
+Negative raw masses are therefore not silently treated as physical. They indicate that the specified speed, radius, cant, CG height, and track width are incompatible with the first-order load-transfer assumptions.
+
+\end{document}

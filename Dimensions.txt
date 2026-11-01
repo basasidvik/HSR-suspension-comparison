@@ -1,0 +1,29 @@
+Shinkansen Railway - Japanese Bullet Train,
+
+Wheel Gauge - 1435 mm
+
+Wheel Diameter - 860 mm
+
+Bogie wheelbase - 2500 mm
+
+Unsprung mass - 3500 kg
+
+Sprung mass - 775 kg
+
+Minimum radius of curvature - 2500-4000 m
+
+Maximum speed - 320 kmph
+
+Distance between track centres - 11 m
+
+Bogie height - 5450 mm
+
+Bogie width - 3090 mm
+
+Bogie length - 25000 mm
+
+Track length - 11m
+
+Distance between each sleeper - 650 -750 mm
+
+No. of sleepers considered - 16
